@@ -2,15 +2,17 @@ import { cookies } from 'next/headers'
 import { getIronSession } from 'iron-session'
 import { sessionOptions } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
-import { redirect } from 'next/navigation'
 
-export default async function Home() {
+export async function GET(): Promise<Response> {
   const cookieStore = await cookies()
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
 
-  if (session.canvasToken) {
-    redirect('/dashboard')
-  } else {
-    redirect('/auth/canvas')
+  if (!session.canvasToken) {
+    return Response.json({ authenticated: false })
   }
+
+  return Response.json({
+    authenticated: true,
+    institutionUrl: session.institutionUrl,
+  })
 }

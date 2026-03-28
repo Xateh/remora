@@ -1,6 +1,6 @@
 -> Upload slide / canvas scrape: slides / lecture info / materials / assignments / paper / pyp
 
--> Identify scopes
+-> Open AI Identify scopes
 
 -> If multiple scopes: ask user -> select scopes + objective (if unspecified in prompt)
 

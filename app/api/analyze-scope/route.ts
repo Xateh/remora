@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "system",
-          content: "You are an academic analyzer. Identify key academic 'scopes' or topics from the provided lecture content. Return ONLY a JSON array of strings."
+          content: "You are an academic analyzer. Identify key academic 'scopes' or topics from the provided lecture content. Return a JSON object with a 'scopes' key containing an array of strings."
         },
         {
           role: "user",
@@ -31,14 +31,14 @@ export async function POST(request: Request) {
       response_format: { type: "json_object" }
     });
 
-    const contentText = response.choices[0].message.content || "[]";
+    const contentText = response.choices[0].message.content || '{"scopes":[]}';
     let scopes: string[] = [];
     try {
       const parsed = JSON.parse(contentText);
-      scopes = Array.isArray(parsed) ? parsed : (parsed.scopes || []);
+      scopes = Array.isArray(parsed.scopes) ? parsed.scopes : [];
     } catch {
-      console.warn("Failed to parse scopes as JSON, splitting by lines instead.");
-      scopes = contentText.split("\n").map((s: string) => s.trim().replace(/^-\s*/, "")).filter(Boolean);
+      console.warn("Failed to parse scopes as JSON object.");
+      scopes = [];
     }
 
     store.update(sessionId, { 

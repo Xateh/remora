@@ -25,6 +25,7 @@ export interface SessionData {
   id: string;
   slidesContent: string;
   scopes: string[];
+  courseIdentity?: string;
   objective?: string;
   status: "IDENTIFYING" | "SCOPES_READY" | "DISCOVERING" | "SCRAPING" | "ANALYZING" | "COMPLETED" | "FAILED";
   results?: FinalResults;

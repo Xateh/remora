@@ -29,11 +29,24 @@ export function uploadContent(
   });
 }
 
-export function analyzeScope(content: string): Promise<{ scopes: string[] }> {
+export function uploadPDF(
+  file: string,
+  fileName: string
+): Promise<{ sessionId: string }> {
+  return apiFetch("/api/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file, fileName }),
+  });
+}
+
+export function analyzeScope(
+  sessionId: string
+): Promise<{ scopes: string[]; courseIdentity?: string }> {
   return apiFetch("/api/analyze-scope", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ sessionId }),
   });
 }
 

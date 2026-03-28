@@ -79,18 +79,24 @@ export async function processSession(sessionId: string) {
       .map((r) => `Scope: ${r.scope}\nDiscovered Materials: ${r.materials}`)
       .join("\n\n---\n\n");
 
+    const courseContext = session.courseIdentity
+      ? `This is a course on "${session.courseIdentity}". `
+      : "";
+    const objectiveContext = session.objective
+      ? `The user's objective is: "${session.objective}". `
+      : "";
+
     const analysisResponse = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content:
-            "You are an educational assistant comparing lecture slides with top university materials to find gaps.",
+          content: `You are an educational assistant comparing lecture slides with top university materials to find gaps. ${courseContext}${objectiveContext}Be specific about the course variant when making comparisons.`,
         },
         {
           role: "user",
           content: `Compare the following discovered materials with the original lecture content.
-Identify exactly what is LACKING in the original slides (missed concepts, shallow depth, missing exercises/pyp examples) based on what top universities include.
+Identify exactly what is LACKING in the original slides (missed concepts, shallow depth, missing exercises/pyp examples) based on what top universities include for this specific course variant.
 
 Original Content:
 ${session.slidesContent}

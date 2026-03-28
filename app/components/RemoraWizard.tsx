@@ -11,12 +11,14 @@ export function RemoraWizard() {
   const [content, setContent] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [scopes, setScopes] = useState<string[]>([]);
+  const [courseIdentity, setCourseIdentity] = useState("");
 
   function reset() {
     setStep(1);
     setContent("");
     setSessionId("");
     setScopes([]);
+    setCourseIdentity("");
   }
 
   return (
@@ -35,10 +37,11 @@ export function RemoraWizard() {
 
         {step === 1 && (
           <Step1Input
-            onComplete={(c, sid, s) => {
+            onComplete={(c, sid, s, ci) => {
               setContent(c);
               setSessionId(sid);
               setScopes(s);
+              setCourseIdentity(ci);
               setStep(2);
             }}
           />
@@ -47,6 +50,7 @@ export function RemoraWizard() {
         {step === 2 && (
           <Step2ScopeSelection
             scopes={scopes}
+            courseIdentity={courseIdentity}
             sessionId={sessionId}
             onComplete={() => setStep(3)}
             onBack={() => setStep(1)}

@@ -1,7 +1,9 @@
 export type JobStatus =
   | "IDENTIFYING"
+  | "SCOPES_READY"
   | "DISCOVERING"
   | "SCRAPING"
+  | "ANALYZING"
   | "COMPLETED"
   | "FAILED";
 

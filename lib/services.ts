@@ -1,6 +1,18 @@
 import { store } from "./store";
 import tinyfish from "./tinyfish";
 import openai from "./openai";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+
+async function dumpSession(sessionId: string) {
+  const session = store.get(sessionId);
+  if (!session) return;
+  const dir = path.join(process.cwd(), "data", "sessions");
+  await mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, `${sessionId}.json`);
+  await writeFile(filePath, JSON.stringify(session, null, 2));
+  console.log(`[Dump] Session written to ${filePath}`);
+}
 
 export async function processSession(sessionId: string) {
   const session = store.get(sessionId);
@@ -91,17 +103,23 @@ export async function processSession(sessionId: string) {
       messages: [
         {
           role: "system",
-          content: `You are an educational assistant comparing lecture slides with top university materials to find gaps. ${courseContext}${objectiveContext}Be specific about the course variant when making comparisons.`,
+          content: `You are an educational gap analyst. ${courseContext}${objectiveContext}
+
+Your job: compare the user's lecture slides against what top universities cover for the same course, and output a concise bullet-point list of **concepts or perspectives NOT covered** in the user's slides.
+
+Rules:
+- Each bullet should be a single, specific gap — e.g. "Geometric intuition behind L1 vs L2 norms (your slides cover the formulas but not why L1 produces sparsity)"
+- Be concrete: name the missing concept and briefly say what the slides do cover nearby, so the gap is clear
+- At the end of each bullet, add a short "Further reading:" pointer (a textbook chapter, lecture series, or keyword to search)
+- Keep it short — no filler, no praise, no summaries of what the slides already do well
+- Order by importance (biggest gaps first)`,
         },
         {
           role: "user",
-          content: `Compare the following discovered materials with the original lecture content.
-Identify exactly what is LACKING in the original slides (missed concepts, shallow depth, missing exercises/pyp examples) based on what top universities include for this specific course variant.
-
-Original Content:
+          content: `Original Slides:
 ${session.slidesContent}
 
-Discovered Materials:
+Discovered Materials from Top Universities:
 ${aggregatedMaterials}`,
         },
       ],
@@ -116,6 +134,7 @@ ${aggregatedMaterials}`,
       },
     });
 
+    await dumpSession(sessionId);
     console.log(`[Processor] Completed session analysis: ${sessionId}`);
   } catch (error) {
     console.error(`[Processor] Error in session ${sessionId}:`, error);

@@ -43,5 +43,8 @@ next-env.d.ts
 .claude
 .remember
 
+# session dumps
+/data
+
 # worktrees
 .worktrees

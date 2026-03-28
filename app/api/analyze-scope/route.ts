@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { store } from "@/lib/store";
 import openai from "@/lib/openai";
 
+const AnalyzeScopeBody = z.object({
+  sessionId: z.string().uuid(),
+});
+
 export async function POST(request: Request) {
   try {
-    const { sessionId } = await request.json();
-
-    if (!sessionId) {
-      return NextResponse.json({ error: "Session ID is required" }, { status: 400 });
+    const parsed = AnalyzeScopeBody.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
+
+    const { sessionId } = parsed.data;
 
     const session = store.get(sessionId);
     if (!session) {
@@ -19,7 +25,7 @@ export async function POST(request: Request) {
     const response = await (openai as any).responses.create({
       model: "gpt-5.4",
       input: `Analyze the following lecture content and identify the key academic "scopes" or topics covered. Return the result as a JSON array of strings:
-      
+
       Content:
       ${session.slidesContent}`,
     });
@@ -37,9 +43,9 @@ export async function POST(request: Request) {
       scopes = response.output_text.split("\n").map((s: string) => s.trim().replace(/^-\s*/, "")).filter(Boolean);
     }
 
-    store.update(sessionId, { 
-      scopes, 
-      status: "IDENTIFYING" // Transitioning or state update
+    store.update(sessionId, {
+      scopes,
+      status: "IDENTIFYING"
     });
 
     return NextResponse.json({ scopes });

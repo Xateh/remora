@@ -4,13 +4,20 @@ import { LRUCache } from "lru-cache";
 // In a serverless environment like Vercel, this won't persist across requests properly
 // but it works for local development and single-session ephemeral processing.
 
+export interface ScopeResult {
+  scope: string;
+  materials: string;
+  error?: string; // set if this individual scope failed
+}
+
 export interface SessionData {
   id: string;
   slidesContent: string;
   scopes: string[];
   objective?: string;
   status: "IDENTIFYING" | "DISCOVERING" | "SCRAPING" | "COMPLETED" | "FAILED";
-  results?: any;
+  results?: ScopeResult[];
+  error?: string; // set on top-level FAILED
 }
 
 const options = {

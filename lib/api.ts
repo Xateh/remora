@@ -12,6 +12,11 @@ export interface Result {
   materials: string;
 }
 
+export interface FinalResults {
+  rawMaterials: Result[];
+  gapAnalysis: string;
+}
+
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
   if (!res.ok) {
@@ -67,7 +72,7 @@ export function selectObjective(
 export function getJobStatus(sessionId: string): Promise<{
   status: JobStatus;
   scopes: string[];
-  results?: Result[];
+  results?: FinalResults;
 }> {
   return apiFetch(`/api/job-status/${sessionId}`);
 }

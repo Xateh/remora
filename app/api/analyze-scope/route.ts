@@ -21,32 +21,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Use OpenAI to identify scopes from slides content
-    const response = await (openai as any).responses.create({
-      model: "gpt-5.4",
-      input: `Analyze the following lecture content and identify the key academic "scopes" or topics covered. Return the result as a JSON array of strings:
-
-      Content:
-      ${session.slidesContent}`,
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an academic analyzer. Identify key academic 'scopes' or topics from the provided lecture content. Return ONLY a JSON array of strings.",
+        },
+        {
+          role: "user",
+          content: session.slidesContent,
+        },
+      ],
+      response_format: { type: "json_object" },
     });
 
-    // Parse keywords from response.output_text
-    // The model is expected to return a JSON array string.
+    const contentText = response.choices[0].message.content || "[]";
     let scopes: string[] = [];
     try {
-      // Basic extraction if it returns markdown or plain text
-      const contentText = response.output_text;
-      const jsonMatch = contentText.match(/\[.*\]/s);
-      scopes = JSON.parse(jsonMatch ? jsonMatch[0] : contentText);
-    } catch (e) {
+      const json = JSON.parse(contentText);
+      scopes = Array.isArray(json) ? json : json.scopes || [];
+    } catch {
       console.warn("Failed to parse scopes as JSON, splitting by lines instead.");
-      scopes = response.output_text.split("\n").map((s: string) => s.trim().replace(/^-\s*/, "")).filter(Boolean);
+      scopes = contentText
+        .split("\n")
+        .map((s: string) => s.trim().replace(/^-\s*/, ""))
+        .filter(Boolean);
     }
 
-    store.update(sessionId, {
-      scopes,
-      status: "IDENTIFYING"
-    });
+    store.update(sessionId, { scopes, status: "SCOPES_READY" });
 
     return NextResponse.json({ scopes });
   } catch (error) {

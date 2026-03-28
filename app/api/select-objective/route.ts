@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { store } from "@/lib/store";
 import { processSession } from "@/lib/services";
+import { after } from "next/server";
 
 const SelectObjectiveBody = z.object({
   sessionId: z.string().uuid(),
@@ -23,18 +24,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Update session with user selection
     store.update(sessionId, {
       scopes: selectedScopes,
-      objective: objective ?? "Research materials from top universities related to these scopes.",
-      status: "DISCOVERING",
+      objective: objective || "Research materials from top universities related to these scopes.",
+      status: "SCRAPING",
     });
 
-    // Start background processing (Discovery & Scraping)
-    // Non-awaiting to return early
-    processSession(sessionId);
+    after(() => {
+      processSession(sessionId);
+    });
 
-    return NextResponse.json({ status: "DISCOVERING" });
+    return NextResponse.json({ status: "SCRAPING" });
   } catch (error) {
     console.error("Select objective error:", error);
     return NextResponse.json({ error: "Failed to set objective" }, { status: 500 });

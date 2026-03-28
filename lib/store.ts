@@ -4,10 +4,21 @@ import { LRUCache } from "lru-cache";
 // In a serverless environment like Vercel, this won't persist across requests properly
 // but it works for local development and single-session ephemeral processing.
 
-export interface ScopeResult {
+export interface AnalysisResult {
   scope: string;
   materials: string;
-  error?: string; // set if this individual scope failed
+}
+
+export interface FinalResults {
+  rawMaterials: AnalysisResult[];
+  gapAnalysis: string;
+}
+
+export interface ProgressLog {
+  timestamp: string;
+  scope: string;
+  message: string;
+  type: "PROGRESS" | "SYSTEM" | "ERROR";
 }
 
 export interface SessionData {
@@ -15,9 +26,11 @@ export interface SessionData {
   slidesContent: string;
   scopes: string[];
   objective?: string;
-  status: "IDENTIFYING" | "DISCOVERING" | "SCRAPING" | "COMPLETED" | "FAILED";
-  results?: ScopeResult[];
-  error?: string; // set on top-level FAILED
+  status: "IDENTIFYING" | "SCOPES_READY" | "DISCOVERING" | "SCRAPING" | "ANALYZING" | "COMPLETED" | "FAILED";
+  results?: FinalResults;
+  logs: ProgressLog[];
+  streamingUrls: Record<string, string>;
+  error?: string;
 }
 
 const options = {

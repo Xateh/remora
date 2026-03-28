@@ -6,7 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/app/components/ui/StatusBadge";
 import { ScopeCard } from "@/app/components/ui/ScopeCard";
 import { getJobStatus } from "@/lib/api";
-import type { JobStatus, Result } from "@/lib/api";
+import type { JobStatus } from "@/lib/api";
+import type { ResourceWithCommentary } from "@/lib/store";
 
 interface Props {
   sessionId: string;
@@ -15,7 +16,7 @@ interface Props {
 
 export function Step3Processing({ sessionId, onReset }: Props) {
   const [status, setStatus] = useState<JobStatus>("DISCOVERING");
-  const [results, setResults] = useState<Result[]>([]);
+  const [results, setResults] = useState<ResourceWithCommentary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
@@ -24,7 +25,7 @@ export function Step3Processing({ sessionId, onReset }: Props) {
       try {
         const data = await getJobStatus(sessionId);
         setStatus(data.status);
-        if (data.results) setResults(data.results);
+        if (data.results) setResults(data.results.resources);
         if (data.status === "COMPLETED" || data.status === "FAILED") {
           clearInterval(intervalRef.current);
           if (data.status === "FAILED") {

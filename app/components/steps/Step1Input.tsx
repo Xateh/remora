@@ -27,7 +27,7 @@ export function Step1Input({ onComplete }: Props) {
     setLoading(true);
     try {
       const { sessionId } = await uploadContent(content);
-      const { scopes } = await analyzeScope(content);
+      const { scopes } = await analyzeScope(sessionId);
       onComplete(content, sessionId, scopes);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");

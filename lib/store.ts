@@ -4,14 +4,31 @@ import { LRUCache } from "lru-cache";
 // In a serverless environment like Vercel, this won't persist across requests properly
 // but it works for local development and single-session ephemeral processing.
 
-export interface AnalysisResult {
+export interface KeywordSet {
   scope: string;
-  materials: string;
+  keywords: string[]; // 3-5 search query variants
+}
+
+export interface DiscoveredResource {
+  scope: string;
+  title: string;
+  url?: string;        // direct link if wave 1 found one
+  university?: string; // fallback identifier
+  query?: string;      // search query for wave 2 if no direct URL
+}
+
+export interface ResourceWithCommentary {
+  scope: string;
+  title: string;
+  url?: string;
+  university?: string;
+  summary: string;     // what the resource covers (from wave-2 TinyFish)
+  commentary: string;  // what it adds beyond the user's slides (from OpenAI)
+  error?: string;      // set if wave-2 retrieval failed; resource still included
 }
 
 export interface FinalResults {
-  rawMaterials: AnalysisResult[];
-  gapAnalysis: string;
+  resources: ResourceWithCommentary[];
 }
 
 export interface ProgressLog {
@@ -26,7 +43,15 @@ export interface SessionData {
   slidesContent: string;
   scopes: string[];
   objective?: string;
-  status: "IDENTIFYING" | "SCOPES_READY" | "DISCOVERING" | "SCRAPING" | "ANALYZING" | "COMPLETED" | "FAILED";
+  status:
+    | "IDENTIFYING"
+    | "SCOPES_READY"
+    | "EXPANDING"
+    | "DISCOVERING"
+    | "RETRIEVING"
+    | "ANALYZING"
+    | "COMPLETED"
+    | "FAILED";
   results?: FinalResults;
   logs: ProgressLog[];
   streamingUrls: Record<string, string>;

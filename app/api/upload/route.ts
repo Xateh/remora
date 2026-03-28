@@ -16,6 +16,8 @@ export async function POST(request: Request) {
       slidesContent: content,
       scopes: [],
       status: "IDENTIFYING",
+      logs: [],
+      streamingUrls: {},
     };
 
     store.set(sessionId, sessionData);

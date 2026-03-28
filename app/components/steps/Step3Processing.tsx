@@ -8,6 +8,7 @@ import { ScopeCard } from "@/app/components/ui/ScopeCard";
 import { getJobStatus } from "@/lib/api";
 import type { JobStatus, FinalResults } from "@/lib/api";
 import ReactMarkdown from "react-markdown";
+import { FishTank } from "@/app/components/ui/FishTank";
 
 interface Props {
   sessionId: string;
@@ -57,10 +58,13 @@ export function Step3Processing({ sessionId, onReset }: Props) {
       )}
 
       {status !== "COMPLETED" && status !== "FAILED" && (
-        <p className="text-sm text-zinc-500">
-          Searching university repositories for lecture materials, assignments,
-          and past papers…
-        </p>
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-500">
+            Searching university repositories for lecture materials, assignments,
+            and past papers…
+          </p>
+          <FishTank />
+        </div>
       )}
 
       {results?.gapAnalysis && status === "COMPLETED" && (

@@ -79,7 +79,56 @@ export async function processSession(sessionId: string) {
       return { scope, materials: scopeAnalysis };
     });
 
-    const results = await Promise.all(agentPromises);
+    const rawResults = await Promise.all(agentPromises);
+
+    // Normalize TinyFish output into a consistent schema
+    const results = await Promise.all(
+      rawResults.map(async ({ scope, materials }) => {
+        if (!materials) return { scope, materials };
+        try {
+          const normalized = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: `You normalize raw university resource data into a consistent JSON schema. Return ONLY valid JSON matching this exact shape:
+{
+  "universities": [
+    {
+      "university": "Full University Name",
+      "course": "Course Code - Course Name",
+      "description": "Brief description of available materials",
+      "resources": {
+        "lecture_slides": "https://...",
+        "assignments": "https://...",
+        "exams": "https://..."
+      },
+      "main_link": "https://..."
+    }
+  ]
+}
+
+Rules:
+- "university" is always the full name
+- "resources" is always an object with descriptive snake_case keys and URL values
+- Only include keys in "resources" that have valid URLs
+- "main_link" is the primary course page URL
+- Omit fields that have no data rather than using empty strings`,
+              },
+              { role: "user", content: materials },
+            ],
+            response_format: { type: "json_object" },
+          });
+          return {
+            scope,
+            materials: normalized.choices[0].message.content || materials,
+          };
+        } catch (e) {
+          console.warn(`[Normalize] Failed for ${scope}, using raw data`, e);
+          return { scope, materials };
+        }
+      })
+    );
     store.update(sessionId, {
       results: { rawMaterials: results, gapAnalysis: "" },
       status: "ANALYZING",
@@ -105,12 +154,15 @@ export async function processSession(sessionId: string) {
           role: "system",
           content: `You are an educational gap analyst. ${courseContext}${objectiveContext}
 
-Your job: compare the user's lecture slides against what top universities cover for the same course, and output a concise bullet-point list of **concepts or perspectives NOT covered** in the user's slides.
+Your job: compare the user's course against equivalent courses at top universities, and output a concise bullet-point list of **topics or concepts that other university courses cover but the user's course does not**.
+
+You are comparing COURSE to COURSE — not course to textbook. Look at what other universities actually teach in their lectures, assignments, and exams for this subject, and identify topics present in their syllabi that are absent or shallow in the user's slides.
 
 Rules:
-- Each bullet should be a single, specific gap — e.g. "Geometric intuition behind L1 vs L2 norms (your slides cover the formulas but not why L1 produces sparsity)"
-- Be concrete: name the missing concept and briefly say what the slides do cover nearby, so the gap is clear
-- At the end of each bullet, add a short "Further reading:" pointer (a textbook chapter, lecture series, or keyword to search)
+- Each bullet should name a specific topic that other courses cover, and cite which university/course includes it — e.g. "**Lock-free data structures** — covered in Berkeley CS162 lectures and CMU 15-410 assignments, but absent from your slides (which stop at semaphores)"
+- Be concrete: say what the user's slides do cover nearby, so the gap is clear
+- At the end of each bullet, add "See: [University Course]" pointing to the specific course that covers it
+- Do NOT compare against general textbook knowledge or what an ideal course "should" cover — only flag gaps that are evidenced by what the discovered university courses actually teach
 - Keep it short — no filler, no praise, no summaries of what the slides already do well
 - Order by importance (biggest gaps first)`,
         },

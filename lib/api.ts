@@ -1,14 +1,14 @@
+import { ResourceWithCommentary } from "./store";
+
 export type JobStatus =
   | "IDENTIFYING"
+  | "SCOPES_READY"
+  | "EXPANDING"
   | "DISCOVERING"
-  | "SCRAPING"
+  | "RETRIEVING"
+  | "ANALYZING"
   | "COMPLETED"
   | "FAILED";
-
-export interface Result {
-  scope: string;
-  materials: string;
-}
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
@@ -29,11 +29,11 @@ export function uploadContent(
   });
 }
 
-export function analyzeScope(content: string): Promise<{ scopes: string[] }> {
+export function analyzeScope(sessionId: string): Promise<{ scopes: string[] }> {
   return apiFetch("/api/analyze-scope", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ sessionId }),
   });
 }
 
@@ -52,7 +52,8 @@ export function selectObjective(
 export function getJobStatus(sessionId: string): Promise<{
   status: JobStatus;
   scopes: string[];
-  results?: Result[];
+  results?: { resources: ResourceWithCommentary[] };
+  error?: string;
 }> {
   return apiFetch(`/api/job-status/${sessionId}`);
 }

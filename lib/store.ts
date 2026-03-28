@@ -26,10 +26,11 @@ export interface SessionData {
   slidesContent: string;
   scopes: string[];
   objective?: string;
-  status: "IDENTIFYING" | "SCOPES_READY" | "SCRAPING" | "ANALYZING" | "COMPLETED" | "FAILED";
+  status: "IDENTIFYING" | "SCOPES_READY" | "DISCOVERING" | "SCRAPING" | "ANALYZING" | "COMPLETED" | "FAILED";
   results?: FinalResults;
   logs: ProgressLog[];
   streamingUrls: Record<string, string>;
+  error?: string;
 }
 
 const options = {

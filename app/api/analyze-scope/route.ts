@@ -1,23 +1,28 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { store } from "@/lib/store";
 import openai from "@/lib/openai";
 
+const AnalyzeScopeBody = z.object({
+  sessionId: z.string().uuid(),
+});
+
 export async function POST(request: Request) {
   try {
-    const { sessionId } = await request.json();
-
-    if (!sessionId) {
-      return NextResponse.json({ error: "Session ID is required" }, { status: 400 });
+    const parsed = AnalyzeScopeBody.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
+
+    const { sessionId } = parsed.data;
 
     const session = store.get(sessionId);
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Use OpenAI to identify scopes from slides content
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Using gpt-4o as standard stable model
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -25,10 +30,10 @@ export async function POST(request: Request) {
         },
         {
           role: "user",
-          content: session.slidesContent
-        }
+          content: session.slidesContent,
+        },
       ],
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
     });
 
     const contentText = response.choices[0].message.content || '{"scopes":[]}';
@@ -41,10 +46,7 @@ export async function POST(request: Request) {
       scopes = [];
     }
 
-    store.update(sessionId, { 
-      scopes, 
-      status: "SCOPES_READY" 
-    });
+    store.update(sessionId, { scopes, status: "SCOPES_READY" });
 
     return NextResponse.json({ scopes });
   } catch (error) {

@@ -20,5 +20,6 @@ export async function GET(
     status: session.status,
     scopes: session.scopes,
     results: session.results,
+    error: session.error,
   });
 }

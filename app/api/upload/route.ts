@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { store, SessionData } from "@/lib/store";
 import { v4 as uuidv4 } from "uuid";
 
+const UploadBody = z.object({
+  content: z.string().min(1),
+});
+
 export async function POST(request: Request) {
   try {
-    const { content } = await request.json();
-
-    if (!content) {
-      return NextResponse.json({ error: "Content is required" }, { status: 400 });
+    const parsed = UploadBody.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
+    const { content } = parsed.data;
     const sessionId = uuidv4();
     const sessionData: SessionData = {
       id: sessionId,

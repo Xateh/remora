@@ -18,6 +18,7 @@
 -> Return target points
 
 -> Feed target points to 2nd wave of tinyfishes
+  - retrieve & digest
   - compare with existing information
 
 -> Record analysis

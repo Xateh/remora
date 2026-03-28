@@ -1,4 +1,56 @@
-## remora
+# Remora — Academic Resource Discovery Engine
+
+Remora is an AI-powered research assistant that helps students and academics **find the best learning materials on any topic** — by mining resources from top universities worldwide.
+
+You give it your existing course materials (lecture slides, assignments, past papers) and it finds what else is out there that you're missing.
+
+## How It Works
+
+```
+Your Materials
+     │
+     ▼
+ ANALYZE              AI identifies distinct academic topics/scopes
+     │                (e.g. "Neural Networks", "Backpropagation", "CNNs")
+     ▼
+ EXPAND               AI generates 3-5 keyword search variants per scope
+     │                (broadening the search net)
+     ▼
+ DISCOVER  (Wave 1)   Parallel AI web agents search Google for each
+     │                keyword set → find university course pages,
+     │                slide links, assignment pages, PYPs
+     ▼
+ RETRIEVE  (Wave 2)   Parallel AI agents scrape and digest each
+     │                discovered resource
+     ▼
+ ANALYZE              AI compares each resource against your existing
+     │                materials → generates commentary on what each adds
+     ▼
+ OUTPUT               Curated resource list with explanations of
+                      what each resource teaches beyond what you have
+```
+
+## Key Technical Ingredients
+
+| Layer | Technology |
+|-------|-----------|
+| Web Framework | Next.js 16 (App Router) |
+| AI Orchestration | OpenAI (scope analysis, keyword expansion, commentary) |
+| Web Scraping Agents | **TinyFish** — parallel browser agents that search and scrape |
+| Canvas Integration | OAuth via Canvas LMS API to pull course materials directly |
+| Session/Job System | Iron Session + in-memory store with status polling |
+| UI | React + Tailwind + shadcn/ui |
+
+## What Makes It Interesting
+
+- **Two-wave scraping architecture**: Wave 1 finds resources; Wave 2 retrieves and digests them. Both waves run in parallel across all scopes using `Promise.allSettled`, so one failed agent never blocks others.
+- **Canvas LMS integration**: Users can connect their Canvas account to pull in their actual course slides, assignments, and readings directly — no manual upload needed.
+- **Gap analysis focus**: The output isn't just a list of links — it's a curated commentary explaining *what each external resource adds beyond what you already have*.
+- **Resilient by design**: Failed web scrapes still appear in results with an `error` flag rather than being silently dropped.
+
+---
+
+## Development
 
 First, run the development server:
 

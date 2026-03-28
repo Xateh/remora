@@ -7,24 +7,29 @@ type AgentFeedState = {
   events: AgentEvent[]
   isCollapsed: boolean
   isRunning: boolean
+  scopes: string[]
   startTinyfishRun: (url: string, goal: string) => Promise<void>
   toggleCollapsed: () => void
   clearEvents: () => void
+  setScopes: (scopes: string[]) => void
 }
 
 const AgentFeedContext = createContext<AgentFeedState>({
   events: [],
   isCollapsed: true,
   isRunning: false,
+  scopes: [],
   startTinyfishRun: async () => {},
   toggleCollapsed: () => {},
   clearEvents: () => {},
+  setScopes: () => {},
 })
 
 export function AgentFeedProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [isCollapsed, setIsCollapsed] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
+  const [scopes, setScopes] = useState<string[]>([])
   const abortRef = useRef<AbortController | null>(null)
 
   const upsertEvent = useCallback((update: AgentEvent) => {
@@ -137,8 +142,8 @@ export function AgentFeedProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AgentFeedContext.Provider value={{
-      events, isCollapsed, isRunning,
-      startTinyfishRun, toggleCollapsed, clearEvents,
+      events, isCollapsed, isRunning, scopes,
+      startTinyfishRun, toggleCollapsed, clearEvents, setScopes,
     }}>
       {children}
     </AgentFeedContext.Provider>

@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { ScopeSelectionCard } from './ScopeSelectionCard'
+import { useAgentFeed } from '@/lib/context/agent-feed-context'
 import type { UIMessage } from '@ai-sdk/ui-utils'
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
 }
 
 export function ChatMessage({ message }: Props) {
+  const { setScopes } = useAgentFeed()
   const isUser = message.role === 'user'
 
   if (isUser) {
@@ -49,30 +51,28 @@ export function ChatMessage({ message }: Props) {
             )
           }
 
-          if (part.type === 'tool-invocation') {
-            const { toolName, toolCallId, state } = part.toolInvocation
+          if (part.type === 'tool-requestScopeSelection' && (part.state === 'input-available' || part.state === 'output-available')) {
+            const scopeList = part.input.scopes as Array<{ id: string; label: string; description: string }>
+            return (
+              <ScopeSelectionCard
+                key={part.toolCallId}
+                scopes={scopeList}
+                onConfirm={(selectedIds: string[]) => {
+                  const labels = selectedIds
+                    .map(id => scopeList.find(s => s.id === id)?.label)
+                    .filter((l): l is string => l !== undefined)
+                  setScopes(labels)
+                }}
+              />
+            )
+          }
 
-            if (toolName === 'requestScopeSelection' && state === 'call') {
-              const args = part.toolInvocation.args as {
-                scopes: Array<{ id: string; label: string; description: string }>
-              }
-              return (
-                <ScopeSelectionCard
-                  key={toolCallId}
-                  scopes={args.scopes}
-                />
-              )
-            }
-
-            if (toolName === 'initiateTinyfishResearch' && state === 'call') {
-              return (
-                <div key={toolCallId} className="text-xs text-muted-foreground italic">
-                  Launching research agents...
-                </div>
-              )
-            }
-
-            return null
+          if (part.type === 'tool-initiateTinyfishResearch' && part.state === 'input-available') {
+            return (
+              <div key={part.toolCallId} className="text-xs text-muted-foreground italic">
+                Launching research agents...
+              </div>
+            )
           }
 
           if (part.type === 'reasoning') {

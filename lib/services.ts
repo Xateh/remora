@@ -50,9 +50,10 @@ async function expandKeywords(session: SessionData): Promise<KeywordSet[]> {
   const text = response.choices[0].message.content ?? "{}";
   const parsed = JSON.parse(text);
   // Model may return { keywordSets: [...] } or a bare array wrapped in a key
+  const fallback = Object.values(parsed)[0];
   const raw: unknown[] = Array.isArray(parsed)
     ? parsed
-    : (parsed.keywordSets ?? parsed.scopes ?? parsed.result ?? Object.values(parsed)[0]);
+    : Array.isArray(fallback) ? (fallback as unknown[]) : [];
 
   const keywordSets: KeywordSet[] = (raw as Array<{ scope: string; keywords: string[] }>).map(
     (item) => ({ scope: item.scope, keywords: item.keywords })
@@ -212,9 +213,10 @@ async function annotateResources(
 
   const text = response.choices[0].message.content ?? "{}";
   const parsed = JSON.parse(text);
+  const fallback = parsed.annotations ?? parsed.resources ?? parsed.result ?? Object.values(parsed)[0];
   const annotations: Array<{ index: number; commentary: string }> = Array.isArray(parsed)
     ? parsed
-    : (parsed.annotations ?? parsed.resources ?? parsed.result ?? Object.values(parsed)[0]);
+    : Array.isArray(fallback) ? (fallback as Array<{ index: number; commentary: string }>) : [];
 
   const commentaryMap = new Map(annotations.map((a) => [a.index, a.commentary]));
 
@@ -267,6 +269,11 @@ export async function processSession(sessionId: string) {
     console.log(`[Pipeline] ANALYZING`);
     const currentSession = store.get(sessionId)!;
     const resources = await annotateResources(retrieved, currentSession.slidesContent);
+
+    const blankCommentaries = resources.filter((r) => !r.error && !r.commentary);
+    if (blankCommentaries.length > 0) {
+      addLog(sessionId, "system", `${blankCommentaries.length} resource(s) have blank commentary (OpenAI may have skipped indices)`, "ERROR");
+    }
 
     store.update(sessionId, {
       status: "COMPLETED",

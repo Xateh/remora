@@ -1,4 +1,4 @@
-import { store, KeywordSet, DiscoveredResource, ResourceWithCommentary, SessionData } from "./store";
+import { store, KeywordSet, DiscoveredResource, ResourceWithCommentary, SessionData, ProgressLog } from "./store";
 import tinyfish from "./tinyfish";
 import openai from "./openai";
 
@@ -9,25 +9,35 @@ type TinyFishEvent =
   | { type: "COMPLETE"; result?: unknown; error?: { message: string }; timestamp: string }
   | { type: string; [key: string]: unknown };
 
+// Per-session pending log buffer — prevents concurrent read-modify-write races
+const pendingLogs = new Map<string, ProgressLog[]>();
+
 function addLog(
   sessionId: string,
   scope: string,
   message: string,
   type: "PROGRESS" | "SYSTEM" | "ERROR"
 ) {
+  const entry: ProgressLog = { timestamp: new Date().toISOString(), scope, message, type };
+  const buffer = pendingLogs.get(sessionId) ?? [];
+  buffer.push(entry);
+  pendingLogs.set(sessionId, buffer);
+}
+
+function flushLogs(sessionId: string) {
+  const buffer = pendingLogs.get(sessionId);
+  if (!buffer || buffer.length === 0) return;
+  pendingLogs.delete(sessionId);
   const current = store.get(sessionId);
   if (!current) return;
-  store.update(sessionId, {
-    logs: [
-      ...current.logs,
-      { timestamp: new Date().toISOString(), scope, message, type },
-    ],
-  });
+  store.update(sessionId, { logs: [...current.logs, ...buffer] });
 }
 
 // ── Phase 1: Keyword Expansion ────────────────────────────────────────────────
 // One OpenAI call — generates 3-5 search query variants per scope.
-async function expandKeywords(session: SessionData): Promise<KeywordSet[]> {
+async function expandKeywords(sessionId: string): Promise<KeywordSet[]> {
+  const session = store.get(sessionId);
+  if (!session) return [];
   const scopeList = session.scopes.join(", ");
   const objective = session.objective ?? "find lecture materials and past year papers";
 
@@ -60,7 +70,7 @@ async function expandKeywords(session: SessionData): Promise<KeywordSet[]> {
   );
 
   for (const ks of keywordSets) {
-    addLog(session.id, ks.scope, `Keywords: ${ks.keywords.join(" | ")}`, "SYSTEM");
+    addLog(sessionId, ks.scope, `Keywords: ${ks.keywords.join(" | ")}`, "SYSTEM");
   }
 
   return keywordSets;
@@ -191,6 +201,20 @@ async function annotateResources(
   const withContent = retrieved.filter((r) => r.summary);
   const failed = retrieved.filter((r) => !r.summary);
 
+  const failedWithPlaceholder: ResourceWithCommentary[] = failed.map((r) => ({
+    scope: r.scope,
+    title: r.title,
+    url: r.url,
+    university: r.university,
+    summary: "",
+    commentary: "",
+    error: r.retrievalError,
+  }));
+
+  if (withContent.length === 0) {
+    return failedWithPlaceholder;
+  }
+
   const resourceList = withContent
     .map((r, i) => `[${i}] Title: ${r.title}\nScope: ${r.scope}\nUniversity: ${r.university ?? "unknown"}\nSummary: ${r.summary}`)
     .join("\n\n---\n\n");
@@ -229,16 +253,6 @@ async function annotateResources(
     commentary: commentaryMap.get(i) ?? "",
   }));
 
-  const failedWithPlaceholder: ResourceWithCommentary[] = failed.map((r) => ({
-    scope: r.scope,
-    title: r.title,
-    url: r.url,
-    university: r.university,
-    summary: "",
-    commentary: "",
-    error: r.retrievalError,
-  }));
-
   return [...annotated, ...failedWithPlaceholder];
 }
 
@@ -251,18 +265,22 @@ export async function processSession(sessionId: string) {
     // Phase 1 — Keyword Expansion
     store.update(sessionId, { status: "EXPANDING", logs: [], streamingUrls: {} });
     console.log(`[Pipeline] EXPANDING — session ${sessionId}`);
-    const keywordSets = await expandKeywords(session);
+    const keywordSets = await expandKeywords(sessionId);
+    flushLogs(sessionId);
 
     // Phase 2 — Wave-1 Discovery
     store.update(sessionId, { status: "DISCOVERING" });
     console.log(`[Pipeline] DISCOVERING — ${keywordSets.flatMap((k) => k.keywords).length} queries`);
     const discovered = await discoverResources(store.get(sessionId)!, keywordSets);
+    flushLogs(sessionId);
     addLog(sessionId, "system", `Discovered ${discovered.length} resources`, "SYSTEM");
+    flushLogs(sessionId);
 
     // Phase 3 — Wave-2 Retrieval
     store.update(sessionId, { status: "RETRIEVING" });
     console.log(`[Pipeline] RETRIEVING — ${discovered.length} resources`);
     const retrieved = await retrieveResources(store.get(sessionId)!, discovered);
+    flushLogs(sessionId);
 
     // Phase 4 — Annotation
     store.update(sessionId, { status: "ANALYZING" });
@@ -282,6 +300,7 @@ export async function processSession(sessionId: string) {
 
     console.log(`[Pipeline] COMPLETED — session ${sessionId}, ${resources.length} resources`);
   } catch (error) {
+    flushLogs(sessionId);
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[Pipeline] FAILED — session ${sessionId}:`, message);
     store.update(sessionId, { status: "FAILED", error: message });

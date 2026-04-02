@@ -26,7 +26,15 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "system",
-          content: "You are an academic analyzer. Identify key academic 'scopes' or topics from the provided lecture content. Return a JSON object with a 'scopes' key containing an array of strings."
+          content: `You are an academic course analyzer. Given lecture content, identify:
+
+1. **courseIdentity**: The specific academic course or sub-discipline these materials belong to. Be precise about the variant — e.g. "Real-Time Operating Systems" not just "Operating Systems", "Functional Programming in Haskell" not just "Programming", "Bayesian Machine Learning" not just "Machine Learning".
+
+2. **scopes**: The key topics and sub-topics covered in the materials. These should be specific enough to search for comparable university resources. Each scope should be a concrete, searchable academic topic.
+
+Return a JSON object with:
+- "courseIdentity": a single string identifying the specific course variant
+- "scopes": an array of specific topic strings`,
         },
         {
           role: "user",
@@ -36,19 +44,21 @@ export async function POST(request: Request) {
       response_format: { type: "json_object" },
     });
 
-    const contentText = response.choices[0].message.content || '{"scopes":[]}';
+    const contentText = response.choices[0].message.content || '{"courseIdentity":"","scopes":[]}';
     let scopes: string[] = [];
+    let courseIdentity = "";
     try {
-      const parsed = JSON.parse(contentText);
-      scopes = Array.isArray(parsed.scopes) ? parsed.scopes : [];
+      const result = JSON.parse(contentText);
+      scopes = Array.isArray(result.scopes) ? result.scopes : [];
+      courseIdentity = typeof result.courseIdentity === "string" ? result.courseIdentity : "";
     } catch {
       console.warn("Failed to parse scopes as JSON object.");
       scopes = [];
     }
 
-    store.update(sessionId, { scopes, status: "SCOPES_READY" });
+    store.update(sessionId, { scopes, courseIdentity, status: "SCOPES_READY" });
 
-    return NextResponse.json({ scopes });
+    return NextResponse.json({ scopes, courseIdentity });
   } catch (error) {
     console.error("Analysis error:", error);
     return NextResponse.json({ error: "Failed to analyze scopes" }, { status: 500 });

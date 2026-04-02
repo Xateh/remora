@@ -1,6 +1,18 @@
 import { store, KeywordSet, DiscoveredResource, ResourceWithCommentary, SessionData, ProgressLog } from "./store";
 import tinyfish from "./tinyfish";
 import openai from "./openai";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
+
+async function dumpSession(sessionId: string) {
+  const session = store.get(sessionId);
+  if (!session) return;
+  const dir = path.join(process.cwd(), "data", "sessions");
+  await mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, `${sessionId}.json`);
+  await writeFile(filePath, JSON.stringify(session, null, 2));
+  console.log(`[Dump] Session written to ${filePath}`);
+}
 
 // Narrowed type for TinyFish stream events (SDK doesn't export its own types)
 type TinyFishEvent =

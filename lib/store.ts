@@ -42,6 +42,7 @@ export interface SessionData {
   id: string;
   slidesContent: string;
   scopes: string[];
+  courseIdentity?: string;
   objective?: string;
   status:
     | "IDENTIFYING"

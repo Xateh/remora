@@ -14,11 +14,19 @@ type Props = {
 
 export function MaterialTreeItem({ id, label, icon, isSelected, onToggle, depth = 0, rightElement }: Props) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle()
+        }
+      }}
       className={cn(
-        'w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-sm text-left transition-colors group',
-        'hover:bg-secondary',
+        'w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-sm text-left transition-colors group cursor-pointer select-none',
+        'hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         isSelected && 'bg-primary/10 text-primary',
         !isSelected && 'text-foreground'
       )}
@@ -35,6 +43,6 @@ export function MaterialTreeItem({ id, label, icon, isSelected, onToggle, depth 
       {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
       <span className="truncate flex-1">{label}</span>
       {rightElement}
-    </button>
+    </div>
   )
 }

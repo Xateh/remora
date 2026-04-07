@@ -19,7 +19,7 @@ type TinyFishEvent =
   | { type: "STREAMING_URL"; streaming_url: string; timestamp: string }
   | { type: "PROGRESS"; purpose: string; timestamp: string }
   | { type: "COMPLETE"; result?: unknown; error?: { message: string }; timestamp: string }
-  | { type: string; [key: string]: unknown };
+  | { type: string; [key: string]: unknown; purpose?: string; error?: { message: string }; streaming_url?: string };
 
 // Per-session pending log buffer — prevents concurrent read-modify-write races
 const pendingLogs = new Map<string, ProgressLog[]>();
@@ -49,43 +49,55 @@ function flushLogs(sessionId: string) {
 // One OpenAI call — generates 3-5 search query variants per scope.
 async function expandKeywords(sessionId: string): Promise<KeywordSet[]> {
   const session = store.get(sessionId);
-  if (!session) return [];
+  if (!session || !session.scopes?.length) {
+    console.warn(`[Pipeline] No scopes found for session ${sessionId}`);
+    return [];
+  }
+  
   const scopeList = session.scopes.join(", ");
   const objective = session.objective ?? "find lecture materials and past year papers";
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are an academic search strategist. For each scope, generate 3-5 Google search query strings that will find lecture slides, assignments, and past year papers from top universities. Return ONLY valid JSON.",
-      },
-      {
-        role: "user",
-        content: `Objective: ${objective}\n\nScopes: ${scopeList}\n\nReturn a JSON array where each element has:\n- "scope": string (exact scope name)\n- "keywords": string[] (3-5 search queries)\n\nExample: [{"scope":"Linear Algebra","keywords":["MIT linear algebra lecture slides","Stanford 18.06 assignments pdf","linear algebra past year papers top university"]}]`,
-      },
-    ],
-    response_format: { type: "json_object" },
-  });
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an academic search strategist. Given a list of course topics (scopes) and a research objective, generate the 3 most effective and specific Google search queries for each scope. These queries should aim to find university-level lecture slides, assignments, and past exam papers from top institutions (e.g., 'MIT course-name lecture pdf').",
+        },
+        {
+          role: "user",
+          content: `Objective: ${objective}\n\nScopes: ${scopeList}\n\nReturn your response as a JSON object with a single root key "results" containing an array of objects. Each object must have:\n- "scope": string (the exact scope provided)\n- "keywords": string[] (EXACTLY 3 search queries)\n\nExample Output:\n{"results":[{"scope":"Linear Algebra","keywords":["MIT linear algebra slides","Stanford 18.06 assignments","open courseware linear algebra exams"]}]}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
 
-  const text = response.choices[0].message.content ?? "{}";
-  const parsed = JSON.parse(text);
-  // Model may return { keywordSets: [...] } or a bare array wrapped in a key
-  const fallback = Object.values(parsed)[0];
-  const raw: unknown[] = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray(fallback) ? (fallback as unknown[]) : [];
+    const text = response.choices[0].message.content ?? '{"results":[]}';
+    const parsed = JSON.parse(text);
+    const raw = Array.isArray(parsed.results) ? parsed.results : (Object.values(parsed)[0] as any[]);
+    
+    if (!Array.isArray(raw)) {
+      throw new Error("Parsed results is not an array");
+    }
 
-  const keywordSets: KeywordSet[] = (raw as Array<{ scope: string; keywords: string[] }>).map(
-    (item) => ({ scope: item.scope, keywords: item.keywords })
-  );
+    const keywordSets: KeywordSet[] = raw.map((item: any) => ({
+      scope: typeof item.scope === 'string' ? item.scope : 'Unknown',
+      keywords: Array.isArray(item.keywords) ? item.keywords : []
+    })).filter(ks => ks.keywords.length > 0);
 
-  for (const ks of keywordSets) {
-    addLog(sessionId, ks.scope, `Keywords: ${ks.keywords.join(" | ")}`, "SYSTEM");
+    for (const ks of keywordSets) {
+      addLog(sessionId, ks.scope, `Expanded search queries: ${ks.keywords.join(" | ")}`, "SYSTEM");
+    }
+
+    return keywordSets;
+  } catch (err) {
+    console.error("[Pipeline] Keyword expansion failed:", err);
+    addLog(sessionId, "System", "Failed to expand keywords, using scopes directly.", "ERROR");
+    // Fallback: use each scope as its own single keyword
+    return session.scopes.map(s => ({ scope: s, keywords: [s] }));
   }
-
-  return keywordSets;
 }
 
 // ── Phase 2: Wave-1 Discovery ─────────────────────────────────────────────────
@@ -100,45 +112,66 @@ async function discoverResources(
     ks.keywords.map(async (keyword) => {
       addLog(session.id, ks.scope, `Discovering: "${keyword}"`, "PROGRESS");
 
-      const stream = (tinyfish.agent.stream as (opts: { url: string; goal: string }) => AsyncIterable<TinyFishEvent>)({
-        url: "https://www.google.com/search?q=" + encodeURIComponent(keyword),
-        goal: `Search for university lecture materials, slides, assignments, and past year papers about "${keyword}". Return a JSON array of objects, each with: title (string), url (string or null), university (string or null), query (string — what to search if no direct URL).`,
+      const stream = await (tinyfish.agent.stream as unknown as (opts: { url: string; goal: string }) => Promise<AsyncIterable<TinyFishEvent>>)({
+        url: "https://www.google.com",
+        goal: `1. Search for university lecture materials, slides, assignments, and past year papers for: "${keyword}".
+2. If blocked by a CAPTCHA, try a different search engine like DuckDuckGo or Bing.
+3. Extract EXACTLY 3 high-quality direct resource links from major universities (.edu or similar).
+4. Return a JSON array of objects with: title (string), url (string), university (string), query (string).
+Return ONLY the JSON array.`,
       });
 
       let rawResult = "";
       for await (const event of stream) {
-        if (event.type === "STREAMING_URL") {
-          const urls = store.get(session.id)?.streamingUrls ?? {};
+        if (event.type === "STREAMING_URL" && event.streaming_url) {
+          const urls = store.get(session.id)!.streamingUrls ?? {};
           store.update(session.id, { streamingUrls: { ...urls, [keyword]: event.streaming_url } });
-        } else if (event.type === "PROGRESS") {
+        } else if (event.type === "PROGRESS" && event.purpose) {
           addLog(session.id, ks.scope, event.purpose, "PROGRESS");
         } else if (event.type === "COMPLETE") {
-          if (event.result) {
-            rawResult = typeof event.result === "string" ? event.result : JSON.stringify(event.result);
-          } else if (event.error) {
-            addLog(session.id, ks.scope, `Wave-1 error for "${keyword}": ${event.error.message}`, "ERROR");
+          // Check both result and resultJson for flexibility
+          const res = (event as any).resultJson || (event as any).result || "";
+          rawResult = typeof res === "string" ? res : JSON.stringify(res);
+          
+          if (event.error) {
+            addLog(session.id, ks.scope, `Discovery error for "${keyword}": ${event.error.message}`, "ERROR");
           }
         }
       }
 
       // Parse agent output into DiscoveredResource[]
       try {
+        if (!rawResult || rawResult === "[]" || rawResult === "{}") {
+           console.warn(`[Pipeline] Wave-1 empty result for "${keyword}"`);
+           return [];
+        }
+
+        console.log(`[Pipeline] Wave-1 Raw Result for "${keyword}":`, rawResult.slice(0, 300));
         const jsonMatch = rawResult.match(/\[[\s\S]*\]/);
-        const items = JSON.parse(jsonMatch ? jsonMatch[0] : rawResult) as Array<{
+        const parsedText = jsonMatch ? jsonMatch[0] : rawResult;
+        
+        const items = JSON.parse(parsedText) as Array<{
           title?: string;
           url?: string;
           university?: string;
           query?: string;
         }>;
-        return items.map((item) => ({
+
+        if (!Array.isArray(items) || items.length === 0) {
+          console.warn(`[Pipeline] No valid items parsed for "${keyword}"`);
+          return [];
+        }
+
+        // Limit to top 3 resources per search query to keep the pipeline efficient
+        return items.slice(0, 3).map((item) => ({
           scope: ks.scope,
           title: item.title ?? keyword,
           url: item.url ?? undefined,
           university: item.university ?? undefined,
           query: item.query ?? keyword,
-        }));
-      } catch {
-        addLog(session.id, ks.scope, `Failed to parse wave-1 output for "${keyword}"`, "ERROR");
+        })).filter(r => r.url); // Ensure we have a URL to follow
+      } catch (err) {
+        console.error(`[Pipeline] Wave-1 Parse Failed for "${keyword}":`, err);
         return [];
       }
     })
@@ -169,24 +202,31 @@ async function retrieveResources(
     addLog(session.id, resource.scope, `Retrieving: ${resource.title}`, "PROGRESS");
 
     try {
-      const stream = (tinyfish.agent.stream as (opts: { url: string; goal: string }) => AsyncIterable<TinyFishEvent>)({
+      const stream = await (tinyfish.agent.stream as unknown as (opts: { url: string; goal: string }) => Promise<AsyncIterable<TinyFishEvent>>)({
         url: target,
         goal: `Retrieve and summarise the academic content at this URL or from the top search result. Focus on: topics covered, depth of coverage, exercises included, and any past year papers. Return a plain-text summary of 100-200 words.`,
       });
 
       let summary = "";
       for await (const event of stream) {
-        if (event.type === "PROGRESS") {
+        if (event.type === "PROGRESS" && event.purpose) {
           addLog(session.id, resource.scope, event.purpose, "PROGRESS");
         } else if (event.type === "COMPLETE") {
-          if (event.result) {
-            summary = typeof event.result === "string" ? event.result : JSON.stringify(event.result);
+          const res = (event as any).resultJson || (event as any).result;
+          if (res) {
+            if (typeof res === "string") {
+              summary = res;
+            } else if (typeof res === "object") {
+              // Extract the most likely text field from the result object
+              summary = res.result || res.summary || res.text || JSON.stringify(res);
+            }
           } else if (event.error) {
             throw new Error(event.error.message);
           }
         }
       }
 
+      console.log(`[Pipeline] Wave-2 Summary for "${resource.title}":`, summary.slice(0, 100));
       return { ...resource, summary };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown retrieval error";
@@ -268,6 +308,39 @@ async function annotateResources(
   return [...annotated, ...failedWithPlaceholder];
 }
 
+// ── Phase 5: Synthesis ───────────────────────────────────────────────────────
+// Final OpenAI call — produces a global gap analysis (overall comparison).
+async function generateGapAnalysis(
+  resources: ResourceWithCommentary[],
+  slidesContent: string
+): Promise<string> {
+  const summarizedList = resources
+    .filter((r) => r.summary)
+    .map((r) => `- ${r.title} (${r.university ?? "unknown"}): ${r.summary.slice(0, 300)}...`)
+    .join("\n\n");
+
+  if (!summarizedList) {
+    return "No comparable research materials were found to analyze against your original resources.";
+  }
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are an academic consultant. Your goal is to synthesize the relationship between a student's original course materials (slides) and a set of newly discovered external resources. Compare them at a high level. Identify what the slides already cover well and highlight exactly what the new materials add (e.g. more depth, practice problems, different perspectives). Use professional, encouraging language and Markdown for structure.",
+      },
+      {
+        role: "user",
+        content: `Original Slides Content:\n${slidesContent}\n\n---\n\nNewly Found External Resources:\n${summarizedList}\n\nProvide a "Gap Analysis" that highlights the top 3-4 key takeaways of how these new resources supplement the original ones. Use Markdown bullet points.`,
+      },
+    ],
+  });
+
+  return response.choices[0].message.content ?? "";
+}
+
 // ── Orchestrator ──────────────────────────────────────────────────────────────
 export async function processSession(sessionId: string) {
   const session = store.get(sessionId);
@@ -305,9 +378,13 @@ export async function processSession(sessionId: string) {
       addLog(sessionId, "system", `${blankCommentaries.length} resource(s) have blank commentary (OpenAI may have skipped indices)`, "ERROR");
     }
 
+    // Phase 5 — Synthesis (Global Gap Analysis)
+    console.log(`[Pipeline] SYNTHESIZING`);
+    const gapAnalysis = await generateGapAnalysis(resources, currentSession.slidesContent);
+
     store.update(sessionId, {
       status: "COMPLETED",
-      results: { resources },
+      results: { resources, gapAnalysis },
     });
 
     console.log(`[Pipeline] COMPLETED — session ${sessionId}, ${resources.length} resources`);

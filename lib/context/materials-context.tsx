@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { MaterialRef, CanvasCourse } from '@/lib/types'
 
 type MaterialsState = {
@@ -43,6 +43,24 @@ export function MaterialsProvider({ children }: { children: React.ReactNode }) {
   const [pastedItems, setPastedItems] = useState<MaterialRef[]>([])
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<Set<string>>(new Set())
 
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedUploads = localStorage.getItem('remora_uploads')
+    const savedPasted = localStorage.getItem('remora_pasted')
+    const savedSelected = localStorage.getItem('remora_selected')
+
+    if (savedUploads) setUploadedFiles(JSON.parse(savedUploads))
+    if (savedPasted) setPastedItems(JSON.parse(savedPasted))
+    if (savedSelected) setSelectedMaterialIds(new Set(JSON.parse(savedSelected)))
+  }, [])
+
+  // Sync to localStorage
+  useEffect(() => {
+    localStorage.setItem('remora_uploads', JSON.stringify(uploadedFiles))
+    localStorage.setItem('remora_pasted', JSON.stringify(pastedItems))
+    localStorage.setItem('remora_selected', JSON.stringify(Array.from(selectedMaterialIds)))
+  }, [uploadedFiles, pastedItems, selectedMaterialIds])
+
   const loadCanvasCourses = useCallback(async () => {
     setCanvasCoursesLoading(true)
     try {
@@ -57,19 +75,42 @@ export function MaterialsProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const addUploadedFile = useCallback(async (file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: form })
-    if (!res.ok) throw new Error('Upload failed')
-    const data = await res.json() as { id: string; filename: string; mimeType: string }
-    const ref: MaterialRef = {
-      id: data.id,
-      type: 'upload',
-      label: data.filename,
-      mimeType: data.mimeType,
-    }
-    setUploadedFiles(prev => [...prev, ref])
-    setSelectedMaterialIds(prev => new Set([...prev, data.id]))
+    return new Promise<void>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        try {
+          const base64 = (reader.result as string).split(',')[1]
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: base64, fileName: file.name }),
+          })
+          
+          if (!res.ok) throw new Error('Upload failed')
+          
+          const data = await res.json() as { sessionId: string }
+          const ref: MaterialRef = {
+            id: data.sessionId,
+            type: 'upload',
+            label: file.name,
+            mimeType: file.type,
+          }
+          
+          setUploadedFiles(prev => [...prev, ref])
+          // Auto-select the newly uploaded file
+          setSelectedMaterialIds(prev => {
+            const next = new Set(prev)
+            next.add(data.sessionId)
+            return next
+          })
+          resolve()
+        } catch (e) {
+          reject(e)
+        }
+      }
+      reader.onerror = () => reject(new Error('File reading failed'))
+      reader.readAsDataURL(file)
+    })
   }, [])
 
   const addPastedItem = useCallback((item: { content?: string; url?: string; label: string }) => {
@@ -81,7 +122,11 @@ export function MaterialsProvider({ children }: { children: React.ReactNode }) {
       url: item.url,
     }
     setPastedItems(prev => [...prev, ref])
-    setSelectedMaterialIds(prev => new Set([...prev, ref.id]))
+    setSelectedMaterialIds(prev => {
+      const next = new Set(prev)
+      next.add(ref.id)
+      return next
+    })
   }, [])
 
   const removeItem = useCallback((id: string) => {

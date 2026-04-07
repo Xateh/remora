@@ -61,6 +61,9 @@ export function AddMaterialsModal({ children }: { children: React.ReactNode }) {
         )}>
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-sm font-semibold text-foreground">Add Materials</Dialog.Title>
+            <Dialog.Description className="sr-only">
+              Upload files, add URLs, or paste text to include in your research session.
+            </Dialog.Description>
             <Dialog.Close className="text-muted-foreground hover:text-foreground transition-colors">
               <XIcon className="w-4 h-4" />
             </Dialog.Close>

@@ -7,7 +7,8 @@ export async function POST(request: Request): Promise<Response> {
   const cookieStore = await cookies()
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
 
-  if (!session.canvasToken) {
+  const isAuthed = session.canvasToken || session.email
+  if (!isAuthed) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

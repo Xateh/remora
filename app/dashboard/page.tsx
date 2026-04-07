@@ -9,7 +9,9 @@ export default async function DashboardPage() {
   const cookieStore = await cookies()
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
 
-  if (!session.canvasToken) {
+  const isAuthed = session.canvasToken || session.email
+
+  if (!isAuthed) {
     redirect('/auth/canvas')
   }
 

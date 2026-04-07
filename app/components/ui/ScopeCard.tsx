@@ -1,95 +1,76 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Result } from "@/lib/api";
+import type { ResourceWithCommentary } from "@/lib/api";
+import { ExternalLinkIcon, AlertCircleIcon, BookOpenIcon } from "lucide-react";
 
-interface UniversityResource {
-  university?: string;
-  course?: string;
-  description?: string;
-  resources?: Record<string, string>;
-  main_link?: string;
-}
-
-function tryParseUniversities(materials: string): UniversityResource[] | null {
-  try {
-    const parsed = JSON.parse(materials);
-    const list = parsed.universities ?? parsed;
-    if (Array.isArray(list) && list.length > 0 && list[0].university) {
-      return list;
-    }
-  } catch {
-    // not JSON
-  }
-  return null;
-}
-
-function formatResourceLabel(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-export function ScopeCard({ scope, materials }: Result) {
-  const universities = tryParseUniversities(materials);
-
-  if (!universities) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{scope}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="whitespace-pre-wrap text-sm text-zinc-400 leading-relaxed">
-            {materials || "No materials found."}
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
+export function ScopeCard({ 
+  scope, 
+  title, 
+  url, 
+  university, 
+  summary, 
+  commentary, 
+  error 
+}: ResourceWithCommentary) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{scope}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {universities.map((uni, i) => (
-          <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <h4 className="font-medium text-white text-sm">{uni.university}</h4>
-              {uni.course && (
-                <span className="text-xs text-zinc-300 shrink-0">{uni.course}</span>
+    <Card className="overflow-hidden border-zinc-800 bg-zinc-900/40">
+      <CardHeader className="pb-3 border-b border-zinc-800 bg-zinc-900/20">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded">
+                {scope}
+              </span>
+              {university && (
+                <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-tight">
+                  {university}
+                </span>
               )}
             </div>
-            {uni.description && (
-              <p className="text-xs text-zinc-200 leading-relaxed">{uni.description}</p>
-            )}
-            {uni.resources && Object.keys(uni.resources).length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {Object.entries(uni.resources).map(([key, url]) => (
-                  <a
-                    key={key}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
-                  >
-                    {formatResourceLabel(key)} ↗
-                  </a>
-                ))}
+            <CardTitle className="text-base text-zinc-100">{title}</CardTitle>
+          </div>
+          {url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors shrink-0"
+              title="Open Resource"
+            >
+              <ExternalLinkIcon className="h-4 w-4" />
+            </a>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-4">
+        {error ? (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-900/10 border border-red-900/20 text-red-400 text-xs">
+            <AlertCircleIcon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <p>Retrival failed: {error}</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                <BookOpenIcon className="h-3 w-3" />
+                Resource Summary
+              </div>
+              <p className="text-sm text-zinc-400 leading-relaxed italic">
+                &ldquo;{summary}&rdquo;
+              </p>
+            </div>
+
+            {commentary && (
+              <div className="space-y-2 p-3 rounded-lg bg-blue-900/10 border border-blue-900/20">
+                <div className="text-[11px] font-bold text-blue-400 uppercase tracking-widest">
+                  AI Commentary vs. Your Slides
+                </div>
+                <p className="text-sm text-zinc-200 leading-relaxed">
+                  {commentary}
+                </p>
               </div>
             )}
-            {uni.main_link && (
-              <a
-                href={uni.main_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Course page ↗
-              </a>
-            )}
-          </div>
-        ))}
+          </>
+        )}
       </CardContent>
     </Card>
   );

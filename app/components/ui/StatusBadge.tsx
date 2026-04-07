@@ -13,12 +13,16 @@ const STATUS_CONFIG: Record<
     label: "Scopes ready",
     className: "bg-blue-900/40 text-blue-300 border-blue-700",
   },
+  EXPANDING: {
+    label: "Expanding keywords…",
+    className: "bg-blue-900/40 text-blue-300 border-blue-700",
+  },
   DISCOVERING: {
     label: "Discovering resources…",
     className: "bg-yellow-900/40 text-yellow-300 border-yellow-700",
   },
-  SCRAPING: {
-    label: "Fetching materials…",
+  RETRIEVING: {
+    label: "Retrieving materials…",
     className: "bg-orange-900/40 text-orange-300 border-orange-700",
   },
   ANALYZING: {

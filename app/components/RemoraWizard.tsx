@@ -22,14 +22,14 @@ export function RemoraWizard() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-12">
+    <div className="flex flex-col items-center px-4 py-8">
       <div className="w-full max-w-2xl space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
-            Remora
+        <div className="space-y-2 text-center">
+          <h1 className="text-2xl font-bold tracking-tight">
+            Research Canvas
           </h1>
-          <p className="text-sm text-zinc-500">
-            Academic resource discovery from your lecture content
+          <p className="text-sm text-muted-foreground">
+            Analyze your materials and discover academic resources
           </p>
         </div>
 

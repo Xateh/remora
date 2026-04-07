@@ -8,7 +8,8 @@ export async function POST(request: Request): Promise<Response> {
   const cookieStore = await cookies()
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
 
-  if (!session.canvasToken) {
+  const isAuthed = session.canvasToken || session.email
+  if (!isAuthed) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -18,24 +19,60 @@ export async function POST(request: Request): Promise<Response> {
     pastedItems?: MaterialRef[]
   }
 
-  const { messages = [], pastedItems = [] } = body
+  const { messages = [], pastedItems = [], materialRefs = [] } = body
+  const { store } = await import('@/lib/store')
 
-  // Build system prompt
-  const materialContext = pastedItems.length > 0
-    ? `\n\nMaterials in context:\n${pastedItems.map(m => {
-        if (m.content) return `- ${m.label}: ${m.content.slice(0, 500)}${m.content.length > 500 ? '...' : ''}`
-        if (m.url) return `- ${m.label} (URL: ${m.url})`
-        return `- ${m.label}`
-      }).join('\n')}`
+  // Build context from multiple sources:
+  // 1. Pasted items (already have content)
+  // 2. Uploaded files (fetch from store by ID)
+  // 3. Research results (fetch from store by ID)
+  
+  const contextParts: string[] = []
+
+  // Handle pasted items
+  pastedItems.forEach(m => {
+    if (m.content) contextParts.push(`[Pasted Content - ${m.label}]:\n${m.content.slice(0, 1000)}`)
+    else if (m.url) contextParts.push(`[URL Reference - ${m.label}]: ${m.url}`)
+  })
+
+  // Handle uploaded files and research results from store
+  materialRefs.forEach(id => {
+    const session = store.get(id)
+    if (session) {
+      if (session.slidesContent) {
+        contextParts.push(`[Document - ${session.courseIdentity || id}]:\n${session.slidesContent.slice(0, 2000)}`)
+      }
+      if (session.results?.resources) {
+        const researchText = session.results.resources
+          .map(r => `- ${r.title}: ${r.summary}\n  AI Insight: ${r.commentary}`)
+          .join('\n')
+        contextParts.push(`[Research Results for ${session.courseIdentity || id}]:\n${researchText}`)
+      }
+      if (session.results?.gapAnalysis) {
+        contextParts.push(`[Gap Analysis for ${session.courseIdentity || id}]:\n${session.results.gapAnalysis}`)
+      }
+    }
+  })
+
+  const materialContext = contextParts.length > 0
+    ? `\n\nMaterials and Research Context:\n${contextParts.join('\n\n')}`
     : ''
 
-  const systemPrompt = `You are Remora, a study assistant that helps students understand their course materials. You have access to materials the student has selected from their Canvas LMS courses, uploaded files, and pasted content.
+  const systemPrompt = `You are Remora, a specialized study assistant.
+  
+  CONTEXT RECEIVED: There are ${contextParts.length} distinct material/research blocks provided below.
+  
+  YOUR CRITICAL MISSION: Use the "Materials and Research Context" section below to answer user questions. If this section is non-empty, you MUST NOT say you don't have access to documents.
+  
+  Your role:
+  - Analyze the provided context (original docs + research findings).
+  - If a specific file is mentioned, look for a matching [Document] or [Research] block.
+  - Explain concepts clearly, suggest related high-tier university topics, and identify gaps.
+  - Be professional and thorough.
 
-Your role:
-- Answer questions about the provided materials clearly and accurately
-- Help students understand difficult concepts
-- Suggest related topics from top universities when relevant
-- Be concise but thorough${materialContext}`
+[Materials and Research Context START]
+${materialContext}
+[Materials and Research Context END]`
 
   const apiKey = process.env.OPENAI_API_KEY
 

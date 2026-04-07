@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     store.update(sessionId, {
       scopes: selectedScopes,
       objective: objective || "Research materials from top universities related to these scopes.",
-      status: "SCRAPING",
+      status: "EXPANDING",
     });
 
     after(() => {

@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/app/components/ui/StatusBadge";
 import { ScopeCard } from "@/app/components/ui/ScopeCard";
 import { getJobStatus } from "@/lib/api";
-import type { JobStatus, FinalResults } from "@/lib/api";
+import type { JobStatus, FinalResults, ResourceWithCommentary } from "@/lib/api";
 import ReactMarkdown from "react-markdown";
 import { FishTank } from "@/app/components/ui/FishTank";
 
@@ -16,10 +16,10 @@ interface Props {
 }
 
 export function Step3Processing({ sessionId, onReset }: Props) {
-  const [status, setStatus] = useState<JobStatus>("SCRAPING");
+  const [status, setStatus] = useState<JobStatus>("EXPANDING");
   const [results, setResults] = useState<FinalResults | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     intervalRef.current = setInterval(async () => {
@@ -28,18 +28,18 @@ export function Step3Processing({ sessionId, onReset }: Props) {
         setStatus(data.status);
         if (data.results) setResults(data.results);
         if (data.status === "COMPLETED" || data.status === "FAILED") {
-          clearInterval(intervalRef.current);
+          if (intervalRef.current) clearInterval(intervalRef.current);
           if (data.status === "FAILED") {
             setError("The discovery process failed. Please try again.");
           }
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to fetch status.");
-        clearInterval(intervalRef.current);
+        if (intervalRef.current) clearInterval(intervalRef.current);
       }
     }, 2500);
 
-    return () => clearInterval(intervalRef.current);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [sessionId]);
 
   return (
@@ -76,15 +76,15 @@ export function Step3Processing({ sessionId, onReset }: Props) {
         </div>
       )}
 
-      {results?.rawMaterials && results.rawMaterials.length > 0 && (
+      {results?.resources && results.resources.length > 0 && (
         <div className="space-y-4">
-          {results.rawMaterials.map((result) => (
-            <ScopeCard key={result.scope} {...result} />
+          {results.resources.map((result: ResourceWithCommentary) => (
+            <ScopeCard key={result.title} {...result} />
           ))}
         </div>
       )}
 
-      {status === "COMPLETED" && !results?.rawMaterials?.length && !results?.gapAnalysis && (
+      {status === "COMPLETED" && !results?.resources?.length && !results?.gapAnalysis && (
         <p className="text-sm text-zinc-500">
           No materials were found. Try adjusting your scopes or objective.
         </p>

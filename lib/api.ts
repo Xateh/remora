@@ -1,14 +1,7 @@
-import { ResourceWithCommentary } from "./store";
+import { ResourceWithCommentary, FinalResults, SessionData } from "./store";
 
-export type JobStatus =
-  | "IDENTIFYING"
-  | "SCOPES_READY"
-  | "EXPANDING"
-  | "DISCOVERING"
-  | "RETRIEVING"
-  | "ANALYZING"
-  | "COMPLETED"
-  | "FAILED";
+export type JobStatus = SessionData["status"];
+export type { ResourceWithCommentary, FinalResults };
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
@@ -29,7 +22,20 @@ export function uploadContent(
   });
 }
 
-export function analyzeScope(sessionId: string): Promise<{ scopes: string[] }> {
+export function uploadPDF(
+  file: string,
+  fileName: string
+): Promise<{ sessionId: string }> {
+  return apiFetch("/api/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file, fileName }),
+  });
+}
+
+export function analyzeScope(
+  sessionId: string
+): Promise<{ scopes: string[]; courseIdentity: string }> {
   return apiFetch("/api/analyze-scope", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -52,7 +58,7 @@ export function selectObjective(
 export function getJobStatus(sessionId: string): Promise<{
   status: JobStatus;
   scopes: string[];
-  results?: { resources: ResourceWithCommentary[] };
+  results?: FinalResults;
   error?: string;
 }> {
   return apiFetch(`/api/job-status/${sessionId}`);

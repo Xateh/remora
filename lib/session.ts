@@ -1,8 +1,10 @@
 import type { SessionOptions } from 'iron-session'
 
 export type SessionData = {
-  canvasToken: string
-  institutionUrl: string
+  canvasToken?: string
+  institutionUrl?: string
+  email?: string
+  loginType: 'canvas' | 'email'
 }
 
 export const sessionOptions: SessionOptions = {

@@ -56,6 +56,7 @@ export async function GET(request: Request): Promise<Response> {
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
   session.canvasToken = access_token
   session.institutionUrl = institutionUrl
+  session.loginType = 'canvas'
   await session.save()
 
   return Response.redirect(new URL('/dashboard', request.url))

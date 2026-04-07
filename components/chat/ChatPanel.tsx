@@ -8,14 +8,22 @@ import { ChatInput } from './ChatInput'
 export function ChatPanel() {
   const { selectedMaterialIds, pastedItems, uploadedFiles } = useMaterials()
 
-  // Build the list of selected named material refs to pass as context
-  const selectedPastedItems = pastedItems.filter(m => selectedMaterialIds.has(m.id))
-  const selectedUploadIds = uploadedFiles
-    .filter(m => selectedMaterialIds.has(m.id))
-    .map(m => m.id)
-  const selectedCanvasIds = Array.from(selectedMaterialIds).filter(id =>
-    id.startsWith('canvas_file_')
-  )
+  // Build the list of material refs to pass as context
+  // Logic: If any are selected, send ONLY selected. If NONE are selected, send ALL.
+  const hasSelection = selectedMaterialIds.size > 0
+
+  const selectedPastedItems = hasSelection 
+    ? pastedItems.filter(m => selectedMaterialIds.has(m.id))
+    : pastedItems
+
+  const selectedUploadIds = hasSelection
+    ? uploadedFiles.filter(m => selectedMaterialIds.has(m.id)).map(m => m.id)
+    : uploadedFiles.map(m => m.id)
+
+  const selectedCanvasIds = hasSelection
+    ? Array.from(selectedMaterialIds).filter(id => id.startsWith('canvas_file_'))
+    : [] // Canvas files still need an ID pattern; we'll stick to selected for now or all if we had them.
+
 
   const {
     messages,
@@ -36,7 +44,15 @@ export function ChatPanel() {
 
   function handleSubmit() {
     if (!input.trim() || isLoading) return
-    append({ role: 'user', content: input })
+    
+    // Explicitly pass the body to append to ensure the latest context is sent
+    append({ role: 'user', content: input }, {
+      body: {
+        materialRefs: [...selectedUploadIds, ...selectedCanvasIds],
+        pastedItems: selectedPastedItems,
+      }
+    })
+    
     setInput('')
   }
 

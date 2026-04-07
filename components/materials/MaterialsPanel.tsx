@@ -12,13 +12,13 @@ import { cn } from '@/lib/utils'
 
 export function MaterialsPanel() {
   const { loadCanvasCourses } = useMaterials()
-  const { isAuthenticated } = useSession()
+  const { loginType, isAuthenticated } = useSession()
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && loginType === 'canvas') {
       loadCanvasCourses()
     }
-  }, [isAuthenticated, loadCanvasCourses])
+  }, [isAuthenticated, loginType, loadCanvasCourses])
 
   return (
     <aside className="w-72 flex flex-col border-r border-border bg-card overflow-hidden">

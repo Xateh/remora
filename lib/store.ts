@@ -29,6 +29,7 @@ export interface ResourceWithCommentary {
 
 export interface FinalResults {
   resources: ResourceWithCommentary[];
+  gapAnalysis?: string;
 }
 
 export interface ProgressLog {
@@ -64,7 +65,10 @@ const options = {
   ttl: 1000 * 60 * 60, // 1 hour
 };
 
-const cache = new LRUCache<string, SessionData>(options);
+// Use a global variable to persist the cache across HMR in development
+const globalForCache = global as unknown as { cache: LRUCache<string, SessionData> };
+const cache = globalForCache.cache || new LRUCache<string, SessionData>(options);
+if (process.env.NODE_ENV !== "production") globalForCache.cache = cache;
 
 export const store = {
   set: (id: string, data: SessionData) => cache.set(id, data),

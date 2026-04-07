@@ -10,34 +10,15 @@ const UploadBody = z.union([
 ]);
 
 async function extractTextFromPDF(base64: string): Promise<string> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content:
-          "Extract all text content from this PDF document. Preserve the structure (headings, bullet points, numbered lists) as plain text. Return only the extracted text, nothing else.",
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "file",
-            file: {
-              filename: "upload.pdf",
-              file_data: `data:application/pdf;base64,${base64}`,
-            },
-          },
-          {
-            type: "text",
-            text: "Extract all the text content from this document.",
-          },
-        ],
-      },
-    ],
-  });
-
-  return response.choices[0].message.content || "";
+  try {
+    const pdf = (await import('pdf-parse-fork')).default
+    const buffer = Buffer.from(base64, 'base64')
+    const data = await pdf(buffer)
+    return data.text || ""
+  } catch (err) {
+    console.error('PDF extraction error:', err)
+    return ""
+  }
 }
 
 export async function POST(request: Request) {
